@@ -1,0 +1,7 @@
+.idea
+.pytest_cache
+__pycache__
+sample_data
+.pyc
+detect.tflite
+labelmap.txt
