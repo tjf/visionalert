@@ -1,3 +1,5 @@
+from fractions import Fraction
+
 import av
 import pytest
 
@@ -14,8 +16,14 @@ def mock_av_open(mocker):
 
 @pytest.fixture()
 def mock_get_10_frames(mocker):
-    """Mock get_frames to return 10 frames and optionally run a function (useful for stopping threads)"""
-    get_frames_mock = ReturnThenRun(range(10))  # Simulate 10 frames
+    """
+    Mock get_frames to return 10 frames at 10 fps and optionally run
+    a function after (useful for stopping threads)
+    """
+    framerate = Fraction(10)
+
+    return_value = [(framerate, x) for x in range(10)]
+    get_frames_mock = ReturnThenRun(return_value)  # Simulate 10 frames
     mocker.patch("visionalert.video.get_frames")
     video.get_frames.side_effect = get_frames_mock
     return get_frames_mock
@@ -75,20 +83,30 @@ def test_streamgrabber_should_exit_after_stream(mocker, mock_get_10_frames):
     mock_callback.assert_has_calls(calls)
 
 
-@pytest.mark.timeout(5)
-def test_streamgrabber_should_process_every_nth_frame(mocker, mock_get_10_frames):
-    mock_callback = mocker.Mock()
-    every_nth = 3
+@pytest.mark.parametrize(
+    "fps, frame_index, framerate, expected",
+    [
+        (5, 0, Fraction(10), False),
+        (5, 1, Fraction(10), True),
+        (3, 3, Fraction(10), True),
+        (2, 5, Fraction(10), False),
+        (4, 4, Fraction(10), True),
+        (100, 0, Fraction(10), False),
+        (100, 1, Fraction(10), False),
+        (100, 2, Fraction(10), False),
+    ],
+)
+def test_streamgrabber_fps_skip_frames(fps, frame_index, framerate, expected):
+    s = video.StreamGrabber(STREAM_NAME, "", None)
+    s.fps = fps
+    assert s._skip_frame(frame_index, framerate) == expected
 
-    s = video.StreamGrabber(STREAM_NAME, "", mock_callback)
-    s.every_nth = every_nth
-    s.retry = False
 
-    s.start()
-    s.join()
-
-    calls = [mocker.call(STREAM_NAME, x) for x in range(0, 10, every_nth)]
-    mock_callback.assert_has_calls(calls)
+@pytest.mark.parametrize("fps, expected", [(10, 10), (0, None), (10.3, None), (25, 25)])
+def test_streamgrabber_allows_fps_values(fps, expected):
+    s = video.StreamGrabber(STREAM_NAME, "", None)
+    s.fps = fps
+    assert s.fps == expected
 
 
 def test_get_frames_should_decode_mp4():
@@ -96,7 +114,7 @@ def test_get_frames_should_decode_mp4():
     frame = None
     for f in video.get_frames("fixtures/sample.mp4"):
         count += 1
-        frame = f
+        frame = f[1]  # Returns tuple of (codec context, frame)
 
     assert count == 50
     assert frame.width == 640
