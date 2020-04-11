@@ -3,9 +3,21 @@ import threading
 import time
 
 import av
+import cv2
+import fpstimer
 
 
 def get_frames(location, connection_timeout=None, read_timeout=None):
+    """
+    Generator that retrieves frames from an libavformat-compatible location.
+
+    :param location: Path or URL containing encoded video.  In short, if it works with FFMPEG, it
+    probably will here, too.  If an RTSP URL is provided, we try to force the protocol to TCP due
+    to an issue with high resolution video and UDP.  The default UDP buffer size allocated by the
+    underlying library just isn't enough to handle an entire high resolution frame.
+    :param connection_timeout: TCP connection timeout for remote hosts
+    :param read_timeout: Socket read timeout for remote hosts
+    """
     container = av.open(
         location,
         options={"rtsp_flags": "prefer_tcp"},
@@ -16,6 +28,15 @@ def get_frames(location, connection_timeout=None, read_timeout=None):
     for frame in container.decode(video=0):
         yield stream.guessed_rate, frame
     container.close()
+
+
+def view_frames(frames, fps):
+    """Display frames at given fps using OpenCV"""
+    timer = fpstimer.FPSTimer(fps)
+    for frame in frames:
+        cv2.imshow("Viewer", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        cv2.waitKey(1)
+        timer.sleep()
 
 
 class StreamGrabber(threading.Thread):
@@ -123,4 +144,3 @@ class StreamGrabber(threading.Thread):
             )
         else:
             self._fps = fps
-
