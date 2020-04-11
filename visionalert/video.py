@@ -63,14 +63,13 @@ class StreamGrabber(threading.Thread):
                     exc_info=self._debug,
                 )
 
-            finally:
-                if not self.retry:
-                    break
-                else:
-                    logging.info(
-                        f"Retrying stream {self.stream_name} in {self.retry_sleep_seconds} seconds"
-                    )
-                    time.sleep(self.retry_sleep_seconds)
+            if not self.retry:
+                break
+            else:
+                logging.info(
+                    f"Retrying stream {self.stream_name} in {self.retry_sleep_seconds} seconds"
+                )
+                time.sleep(self.retry_sleep_seconds)
 
         logging.info(f"Stream {self.stream_name} complete. Exiting.")
 
