@@ -7,9 +7,9 @@ import cv2
 import fpstimer
 
 
-def get_frames(location, connection_timeout=None, read_timeout=None):
+def get_frames(location, connection_timeout=None, read_timeout=None, requested_fps=None):
     """
-    Generator that retrieves frames from an libavformat-compatible location.
+    Generator that retrieves frames from a libavformat-compatible location.
 
     :param location: Path or URL containing encoded video.  In short, if it works with FFMPEG, it
     probably will here, too.  If an RTSP URL is provided, we try to force the protocol to TCP due
@@ -17,6 +17,7 @@ def get_frames(location, connection_timeout=None, read_timeout=None):
     underlying library just isn't enough to handle an entire high resolution frame.
     :param connection_timeout: TCP connection timeout for remote hosts
     :param read_timeout: Socket read timeout for remote hosts
+    :param requested_fps: Limit the framerate.  If None, then frames are delivered at the native rate.
     """
     container = av.open(
         location,
@@ -25,8 +26,18 @@ def get_frames(location, connection_timeout=None, read_timeout=None):
     )
     stream = container.streams.video[0]  # Only care about the first video stream
     stream.thread_type = "AUTO"
+    fps = stream.guessed_rate
+
+    if requested_fps and requested_fps > fps:
+        logging.warning(f'Requested FPS {requested_fps} is higher than stream supports {float(fps)}')
+
+    frame_index = -1
     for frame in container.decode(video=0):
-        yield stream.guessed_rate, frame
+        frame_index += 1
+        if requested_fps and frame_index % (int(fps / requested_fps)) >= 1:
+            continue
+        yield frame
+
     container.close()
 
 
@@ -40,7 +51,7 @@ def view_frames(frames, fps):
 
 
 class StreamGrabber(threading.Thread):
-    def __init__(self, stream_name, location, on_frame):
+    def __init__(self, stream_name, location, on_frame, fps=None):
         super(StreamGrabber, self).__init__(
             name=f"{self.__class__.__name__}-{stream_name}", daemon=True
         )
@@ -53,8 +64,8 @@ class StreamGrabber(threading.Thread):
         self.retry = True
         self.connection_timeout = 3.0
         self.read_timeout = 3.0
+        self.fps = fps
 
-        self._fps = None
         self._last_frame = None
         self._last_frame_lock = threading.RLock()
         self._stop_requested = False
@@ -74,6 +85,7 @@ class StreamGrabber(threading.Thread):
                     self.location,
                     connection_timeout=self.connection_timeout,
                     read_timeout=self.read_timeout,
+                    requested_fps=self.fps
                 )
 
                 self._process_frames(frame_gen)
@@ -96,51 +108,15 @@ class StreamGrabber(threading.Thread):
         logging.info(f"Stream {self.stream_name} complete. Exiting.")
 
     def _process_frames(self, frame_gen):
-        current_frame_index = -1
-        for framerate, frame in frame_gen:
-            current_frame_index += 1
-
+        for frame in frame_gen:
             if self._stop_requested:
                 break
 
-            # Skip frames to meet configures fps
-            if self._skip_frame(current_frame_index, framerate):
-                continue
-            else:
-                with self._last_frame_lock:
-                    self._last_frame = frame
-                self.on_frame(self.stream_name, self._last_frame)
-
-    def _skip_frame(self, index, framerate):
-        if not self.fps:
-            return False
-        elif self.fps > framerate:
-            if index == 0:
-                logging.warning(
-                    f"Configured FPS of {self.fps} is higher than stream {self.stream_name} supports ({float(framerate)})"
-                )
-            return False
-        elif self.fps == framerate:
-            return False
-        elif index % (int(framerate) / self.fps) >= 1:
-            return True
-        else:
-            return False
+            with self._last_frame_lock:
+                self._last_frame = frame
+            self.on_frame(self.stream_name, self._last_frame)
 
     @property
     def last_frame(self):
         with self._last_frame_lock:
             return self._last_frame
-
-    @property
-    def fps(self):
-        return self._fps
-
-    @fps.setter
-    def fps(self, fps):
-        if not isinstance(fps, int) or fps < 1:
-            logging.warning(
-                f"Invalid fps value {fps} for stream {self.name}.  Using native framerate."
-            )
-        else:
-            self._fps = fps
