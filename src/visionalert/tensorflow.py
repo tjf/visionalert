@@ -2,7 +2,7 @@ import cv2
 import numpy
 from tflite_runtime.interpreter import Interpreter
 
-from visionalert import Rectangle, Object
+from visionalert import Rectangle, DetectedObject
 
 
 def load_labels(filename):
@@ -14,7 +14,7 @@ def load_labels(filename):
         return labels
 
 
-def calc_relative_box(frame, box):
+def calc_absolute_box(frame, box):
     h, w, _ = frame.shape
     start_y = int(max(1, (box[0] * h)))
     start_x = int(max(1, (box[1] * w)))
@@ -65,9 +65,9 @@ class ObjectDetector:
 
         detection_results = []
         for i, score in enumerate(scores):
-            box = calc_relative_box(original_frame, boxes[i])
+            box = calc_absolute_box(original_frame, boxes[i])
             name = self._labels[int(names[i])]
-            result = Object(name=name, confidence=score, coordinates=box)
+            result = DetectedObject(name=name, confidence=score, coordinates=box)
             detection_results.append(result)
 
         return detection_results

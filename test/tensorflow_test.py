@@ -79,7 +79,7 @@ def test_objectdetector_parse_detected_objects(
         mock_interpreter_response[2],
     ]
 
-    expected = tf.Object("cat", 0.8, tf.Rectangle(64, 96, 576, 384))
+    expected = tf.DetectedObject("cat", 0.8, tf.Rectangle(64, 96, 576, 384))
     result = detector.detect_objects(mock_input_image)
 
     mock_interpreter.invoke.assert_called_once()
