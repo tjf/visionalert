@@ -9,6 +9,8 @@ from PIL import Image
 
 import visionalert.alert as alert
 
+logger = logging.getLogger(__name__)
+
 DetectionResult = collections.namedtuple(
     "DetectionResult", ["name", "confidence", "coordinates"]
 )
@@ -119,7 +121,7 @@ class DetectionDispatcher:
             self._deque.appendleft((stream_name, frame))
             self._semaphore.release()  # Let other thread know something is waiting
         except ValueError:
-            logging.warning(
+            logger.warning(
                 "Object detection input queue overflow detected, discarding oldest frame."
             )
 
@@ -128,7 +130,7 @@ class DetectionDispatcher:
             self._semaphore.acquire()
             stream_name, frame = self._deque.pop()
 
-            logging.debug(f"Submitting frame for object detection from {stream_name}")
+            logger.debug(f"Submitting frame for object detection from {stream_name}")
             detections = self._detection_function(frame)
             # detections = [
             #     detection
@@ -146,7 +148,7 @@ class DetectionDispatcher:
 
     def add_sensor(self, sensor):
         self._sensors[sensor.stream_name].append(sensor)
-        logging.debug(f"Adding sensor {sensor} for stream {sensor.stream_name}")
+        logger.debug(f"Adding sensor {sensor} for stream {sensor.stream_name}")
 
     def add_mask(self, stream_name, mask):
         self._masks[stream_name] = mask
@@ -190,11 +192,11 @@ class Sensor:
             time.time() - self.event.last_event_frame_time
             > self.seconds_without_detection
         ):
-            logging.info(f"New detection event triggered on {self.stream_name}!")
+            logger.info(f"New detection event triggered on {self.stream_name}!")
             self.event = alert.Event(self.stream_name)
             self._alerter.enqueue_alert(self.event)
 
-        logging.info(
+        logger.info(
             f"{item.name.capitalize()} detected on stream {self.stream_name} with confidence "
             f"score {item.confidence} at {item.coordinates}"
         )

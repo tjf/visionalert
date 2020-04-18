@@ -6,6 +6,8 @@ import av
 import cv2
 import fpstimer
 
+logger = logging.getLogger(__name__)
+
 
 def get_frames(location, connection_timeout=None, read_timeout=None, fps=None, seek=0):
     """
@@ -78,7 +80,7 @@ class Camera:
     def _capture_loop(self):
         while True:
             try:
-                logging.info(f"Connecting to camera {self.name}")
+                logger.info(f"Connecting to camera {self.name}")
                 for frame in get_frames(
                     self.url,
                     connection_timeout=self.connection_timeout,
@@ -88,7 +90,7 @@ class Camera:
                     self.on_frame(self.name, frame)
 
             except Exception as e:
-                logging.error(
+                logger.error(
                     f"Error encountered reading frames from {self.name}: {e}.  "
                     f"Trying again in {self.retry_wait} second(s)."
                 )

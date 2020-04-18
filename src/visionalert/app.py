@@ -8,6 +8,8 @@ from visionalert.config import load_config, Config
 from visionalert.detection import DetectionDispatcher, Sensor, load_mask
 from visionalert.video import Camera
 
+logger = logging.getLogger(__name__)
+
 
 def convert_frame_to_rgb(func):
     def _wrapper_to_rgb(name, frame):
@@ -25,7 +27,7 @@ def init_camera(params, dispatcher):
     )
 
     if "mask" in params:
-        logging.info(f"Loading mask {params['mask']} for {cam.name}")
+        logger.info(f"Loading mask {params['mask']} for {cam.name}")
         dispatcher.add_mask(cam.name, load_mask(params["mask"]))
 
     for sensor_type, sensor_conf in params["interests"].items():

@@ -10,6 +10,8 @@ import requests
 
 from visionalert.config import Config
 
+logger = logging.getLogger(__name__)
+
 
 def s3_upload(byte_object, mime_type, s3_filename):
     s3 = boto3.client(
@@ -74,12 +76,12 @@ class Alerter:
                 f"{Config['aws_image_base_url']}/{s3_filename}",
             )
 
-            logging.info(
+            logger.info(
                 f"Sending alert on stream {event.stream_name} with confidence {event.confidence}"
             )
 
         except Exception as e:
-            logging.warning(e)
+            logger.warning(e)
 
 
 class Event:
