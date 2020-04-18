@@ -25,7 +25,7 @@ def get_frames(location, connection_timeout=None, read_timeout=None, fps=None, s
 
     container = av.open(
         location,
-        options={"rtsp_flags": "prefer_tcp", "rtsp_transport": "tcp"},
+        options={"rtsp_flags": "prefer_tcp"},
         timeout=(connection_timeout, read_timeout),
     )
 
