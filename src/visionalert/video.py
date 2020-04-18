@@ -7,7 +7,7 @@ import cv2
 import fpstimer
 
 
-def get_frames(location, connection_timeout=None, read_timeout=None, requested_fps=None):
+def get_frames(location, connection_timeout=None, read_timeout=None, fps=None, seek=0):
     """
     Generator that retrieves frames from a libavformat-compatible location.
 
@@ -17,25 +17,33 @@ def get_frames(location, connection_timeout=None, read_timeout=None, requested_f
     underlying library just isn't enough to handle an entire high resolution frame.
     :param connection_timeout: TCP connection timeout for remote hosts
     :param read_timeout: Socket read timeout for remote hosts
-    :param requested_fps: Limit the framerate.  If None, then frames are delivered at the native rate.
+    :param fps: Return this many frames per second, dropping the others.
+    :param seek: Seek this many seconds ahead before returning frames, if possible.
     """
+
     container = av.open(
         location,
-        options={"rtsp_flags": "prefer_tcp"},
+        options={"rtsp_flags": "prefer_tcp", "rtsp_transport": "tcp"},
         timeout=(connection_timeout, read_timeout),
     )
+
     stream = container.streams.video[0]  # Only care about the first video stream
     stream.thread_type = "AUTO"
-    fps = stream.guessed_rate
 
-    if requested_fps and requested_fps > fps:
-        logging.warning(f'Requested FPS {requested_fps} is higher than stream supports {float(fps)}')
+    if seek:
+        container.seek(int(seek / stream.time_base), stream=stream)
+
+    if fps and fps > stream.guessed_rate:
+        raise ValueError(
+            f"Requested FPS {fps} is higher than stream supports {float(stream.guessed_rate)}"
+        )
 
     frame_index = -1
     for frame in container.decode(video=0):
         frame_index += 1
-        if requested_fps and frame_index % (int(fps / requested_fps)) >= 1:
+        if fps and frame_index % (int(stream.guessed_rate / fps)) >= 1:
             continue
+
         yield frame
 
     container.close()
@@ -50,73 +58,38 @@ def view_frames(frames, fps):
         timer.sleep()
 
 
-class StreamGrabber(threading.Thread):
-    def __init__(self, stream_name, location, on_frame, fps=None):
-        super(StreamGrabber, self).__init__(
-            name=f"{self.__class__.__name__}-{stream_name}", daemon=True
-        )
-
-        self.stream_name = stream_name
-        self.location = location
-        self.on_frame = on_frame
-
-        self.retry_sleep_seconds = 1
-        self.retry = True
+class Camera:
+    def __init__(self, name, url, on_frame, fps=None):
+        self.name = name
+        self.url = url
+        self.fps = fps
+        self.retry_wait = 1
         self.connection_timeout = 3.0
         self.read_timeout = 3.0
-        self.fps = fps
+        self.on_frame = on_frame
 
-        self._last_frame = None
-        self._last_frame_lock = threading.RLock()
-        self._stop_requested = False
-        self._debug = False
+        self._capture_thread = threading.Thread(
+            name=f"Camera-{self.name}", daemon=True, target=self._capture_loop
+        )
 
-    def stop(self) -> None:
-        self._stop_requested = True
+    def start(self):
+        self._capture_thread.start()
 
-    def run(self) -> None:
-        """Runs in a daemon thread to receive and store the most recent frame from the camera"""
-        while not self._stop_requested:
+    def _capture_loop(self):
+        while True:
             try:
-                logging.info(
-                    f"Opening stream {self.stream_name} at {self.location}"  # TODO scrub password
-                )
-                frame_gen = get_frames(
-                    self.location,
+                logging.info(f"Connecting to camera {self.name}")
+                for frame in get_frames(
+                    self.url,
                     connection_timeout=self.connection_timeout,
                     read_timeout=self.read_timeout,
-                    requested_fps=self.fps
-                )
-
-                self._process_frames(frame_gen)
+                    fps=self.fps,
+                ):
+                    self.on_frame(self.name, frame)
 
             except Exception as e:
                 logging.error(
-                    f"Error encountered reading frames from stream {self.name}: %s.",
-                    e,
-                    exc_info=self._debug,
+                    f"Error encountered reading frames from {self.name}: {e}.  "
+                    f"Trying again in {self.retry_wait} second(s)."
                 )
-
-            if not self.retry:
-                break
-            else:
-                logging.info(
-                    f"Retrying stream {self.stream_name} in {self.retry_sleep_seconds} seconds"
-                )
-                time.sleep(self.retry_sleep_seconds)
-
-        logging.info(f"Stream {self.stream_name} complete. Exiting.")
-
-    def _process_frames(self, frame_gen):
-        for frame in frame_gen:
-            if self._stop_requested:
-                break
-
-            with self._last_frame_lock:
-                self._last_frame = frame
-            self.on_frame(self.stream_name, self._last_frame)
-
-    @property
-    def last_frame(self):
-        with self._last_frame_lock:
-            return self._last_frame
+                time.sleep(self.retry_wait)
