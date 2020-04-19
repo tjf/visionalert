@@ -94,7 +94,7 @@ class Mask:
         return 255 not in self._mask[row][rectangle.start_x : rectangle.end_x]
 
 
-class DetectionDispatcher:
+class Dispatcher:
     """
     Receives frames from the configured cameras and submits them to the list
     of sensors configured for a given camera.

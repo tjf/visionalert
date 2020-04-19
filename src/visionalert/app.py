@@ -5,7 +5,7 @@ import threading
 
 from visionalert import tensorflow
 from visionalert.config import load_config, Config
-from visionalert.detection import DetectionDispatcher, Sensor, load_mask
+from visionalert.detection import Dispatcher, Sensor, load_mask
 from visionalert.video import Camera
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ def run():
     detector = tensorflow.create_detector(
         Config["tensorflow_model_file"], Config["tensorflow_label_map"]
     )
-    dispatcher = DetectionDispatcher(detector)
+    dispatcher = Dispatcher(detector)
     cameras = [init_camera(params, dispatcher) for params in Config["cameras"]]
     for c in cameras:
         c.start()
