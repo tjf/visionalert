@@ -1,41 +1,19 @@
 import argparse
+import collections
 import logging
 import sys
 import threading
 
+import numpy
+from PIL import Image
+
 from visionalert import tensorflow
+from visionalert.alert import Notifier
 from visionalert.config import load_config, Config
-from visionalert.detection import Dispatcher, Sensor, load_mask
+from visionalert.detection import Dispatcher, Interest
 from visionalert.video import Camera
 
 logger = logging.getLogger(__name__)
-
-
-def convert_frame_to_rgb(func):
-    def _wrapper_to_rgb(name, frame):
-        func(name, frame.to_ndarray(format="rgb24"))
-
-    return _wrapper_to_rgb
-
-
-def init_camera(params, dispatcher):
-    cam = Camera(
-        params["name"],
-        params["url"],
-        convert_frame_to_rgb(dispatcher.submit_frame),
-        fps=params["fps"],
-    )
-
-    if "mask" in params:
-        logger.info(f"Loading mask {params['mask']} for {cam.name}")
-        dispatcher.add_mask(cam.name, load_mask(params["mask"]))
-
-    for sensor_type, sensor_conf in params["interests"].items():
-        dispatcher.add_sensor(
-            Sensor(cam.name, sensor_type, sensor_conf["confidence"])
-        )
-
-    return cam
 
 
 def parse_args():
@@ -49,28 +27,70 @@ def parse_args():
     return parser.parse_args()
 
 
-def run():
-    args = parse_args()
-
+def init_logging(debug):
     logging.basicConfig(
-        level=logging.DEBUG if args.debug else logging.INFO,
+        level=logging.DEBUG if debug else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s [%(threadName)s] %(message)s",
     )
 
-    if not args.debug:  # Hide nasty stack traces unless we're in debug mode
+    if not debug:  # Hide nasty stack traces unless we're in debug mode
         sys.tracebacklimit = 0
 
+
+def init_camera(config, frame_action):
+    return Camera(
+        config["name"],
+        config["url"],
+        frame_action,
+        fps=config["fps"] if "fps" in config else None,
+        mask=init_mask(config["mask"]) if "mask" in config else None,
+        interests=init_interests(config["interests"]),
+    )
+
+
+def init_mask(filename):
+    image = Image.open(filename)
+    return numpy.asarray(image)
+
+
+def init_interests(config):
+    return {
+        name: Interest(name=name, confidence=v["confidence"])
+        for name, v in config.items()
+    }
+
+
+def run():
+    args = parse_args()
     load_config(args.config)
+    init_logging(args.debug)
+
+    input_queue = DiscardingQueue(
+        Config["input_queue_maximum_frames"],
+        overflow_action=lambda: logger.warning(
+            "Object detection input queue overflow detected, discarding oldest frame!"
+        ),
+    )
+
+    cameras = {
+        params["name"]: init_camera(params, input_queue.put)
+        for params in Config["cameras"]
+    }
 
     detector = tensorflow.create_detector(
         Config["tensorflow_model_file"], Config["tensorflow_label_map"]
     )
-    dispatcher = Dispatcher(detector)
-    cameras = [init_camera(params, dispatcher) for params in Config["cameras"]]
-    for c in cameras:
-        c.start()
 
-    threading.Event().wait()
+    dispatcher = Dispatcher(input_queue.get, detector, Notifier.submit_detections, cameras)
+    dispatcher.start()
+
+    for camera in cameras.values():
+        camera.connection_timeout = Config["connection_timeout_seconds"]
+        camera.read_timeout = Config["read_timeout_seconds"]
+        camera.start()
+
+    dispatcher.join()
+
 class DiscardingQueue:
     """A bounded queue that discards the oldest items when it overflows"""
 
