@@ -1,12 +1,15 @@
 import logging
 import threading
 import time
+import collections
 
 import av
 import cv2
 import fpstimer
 
 logger = logging.getLogger(__name__)
+
+Frame = collections.namedtuple("Frame", ["camera_name", "data"])
 
 
 def get_frames(location, connection_timeout=None, read_timeout=None, fps=None, seek=0):
@@ -61,14 +64,16 @@ def view_frames(frames, fps):
 
 
 class Camera:
-    def __init__(self, name, url, on_frame, fps=None):
+    def __init__(self, name, url, frame_action, fps=None, mask=None, interests=None):
         self.name = name
         self.url = url
         self.fps = fps
+        self.mask = mask
+        self.interests = interests or {}
         self.retry_wait = 1
         self.connection_timeout = 3.0
         self.read_timeout = 3.0
-        self.on_frame = on_frame
+        self._frame_action = frame_action
 
         self._capture_thread = threading.Thread(
             name=f"Camera-{self.name}", daemon=True, target=self._capture_loop
@@ -87,7 +92,7 @@ class Camera:
                     read_timeout=self.read_timeout,
                     fps=self.fps,
                 ):
-                    self.on_frame(self.name, frame)
+                    self._frame_action(Frame(self.name, frame.to_ndarray(format="rgb24")))
 
             except Exception as e:
                 logger.error(
