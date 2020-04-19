@@ -51,18 +51,58 @@ def send_push_notification(title, image_url):
     )
 
 
-class Alerter:
+class Notifier:
     """
     Responsible for sending alert when an event is received.
     """
-    executor = ThreadPoolExecutor(thread_name_prefix="Alerter")
+
+    executor = ThreadPoolExecutor(thread_name_prefix="Notifier")
+    _event_scoreboard = {}
 
     @classmethod
-    def enqueue_alert(cls, event):
-        cls.executor.submit(cls.execute, event)
+    def _get_last_object_event(cls, camera_name, object_name):
+        if camera_name not in cls._event_scoreboard:
+            cls._event_scoreboard[camera_name] = {}
+
+        if object_name not in cls._event_scoreboard[camera_name]:
+            cls._event_scoreboard[camera_name][object_name] = None
+
+        return cls._event_scoreboard[camera_name][object_name]
 
     @classmethod
-    def execute(cls, event):
+    def _set_last_object_event(cls, event):
+        cls._event_scoreboard[event.camera_name][event.object_name] = event
+
+    @classmethod
+    def submit_detections(cls, data):
+        detections, frame = data
+
+        for each in detections:
+            event = cls._get_last_object_event(frame.camera_name, each.name)
+
+            if not event or time.time() - event.last_frame_time > 30:
+                logger.info(
+                    f"New detection event for {each.name} triggered on {frame.camera_name} "
+                    f"with confidence {each.confidence * 100:.2f}%"
+                )
+                new_event = Event(frame.camera_name, each.name)
+                new_event.update(each.confidence, frame.data)
+                cls._set_last_object_event(new_event)
+                cls._enqueue_alert(new_event)
+
+            else:
+                logger.info(
+                    f"{each.name.capitalize()} still detected on camera {frame.camera_name} "
+                    f"with confidence {each.confidence * 100:.2f}% at {each.coordinates}"
+                )
+                event.update(each.confidence, frame.data)
+
+    @classmethod
+    def _enqueue_alert(cls, event):
+        cls.executor.submit(cls._send_alert, event)
+
+    @classmethod
+    def _send_alert(cls, event):
         try:
             # Wait a few seconds to give the event a chance to potentially
             # get a higher scoring frame.
@@ -72,12 +112,13 @@ class Alerter:
             s3_upload(frame_to_jpeg(event.frame), "image/jpg", s3_filename)
 
             send_push_notification(
-                f"{event.stream_name} Motion Detected",
+                f"{event.camera_name} Motion Detected",
                 f"{Config['aws_image_base_url']}/{s3_filename}",
             )
 
             logger.info(
-                f"Sending alert on stream {event.stream_name} with confidence {event.confidence}"
+                f"Sending alert for {event.object_name} on camera {event.camera_name} "
+                f"with confidence {event.confidence * 100:.2f}%"
             )
 
         except Exception as e:
@@ -86,23 +127,24 @@ class Alerter:
 
 class Event:
     """
-    Container that is populated by a sensor when an event happens.  As the event
-    is being triggered, instances of this are continually updated to capture
-    the frame with the highest confidence score until a configured amount of time
-    passes without any detections, thus ending the event.
+    Updateable container representing a notification Event.  Allows the representative
+    frame to be updated if one with a higher confidence is available.
     """
-    def __init__(self, stream_name) -> None:
-        self.stream_name = stream_name
-        self.last_event_frame_time = 0.0
 
+    def __init__(self, camera_name, object_name) -> None:
+        self.camera_name = camera_name
+        self.object_name = object_name
         self._mutex = threading.RLock()  # Just being cautious here
+        self._last_frame_time = 0.0
         self._confidence = 0.0
         self._frame = None
 
     def update(self, confidence, frame):
         with self._mutex:
-            self._confidence = confidence
-            self._frame = frame
+            self._last_frame_time = time.time()
+            if confidence > self._confidence:
+                self._frame = frame
+                self._confidence = confidence
 
     @property
     def confidence(self):
@@ -113,3 +155,8 @@ class Event:
     def frame(self):
         with self._mutex:
             return self._frame
+
+    @property
+    def last_frame_time(self):
+        with self._mutex:
+            return self._last_frame_time
