@@ -71,6 +71,27 @@ def run():
         c.start()
 
     threading.Event().wait()
+class DiscardingQueue:
+    """A bounded queue that discards the oldest items when it overflows"""
+
+    def __init__(self, max_size, overflow_action=None) -> None:
+        self._deque = collections.deque(maxlen=max_size)
+        self._semaphore = threading.BoundedSemaphore(max_size)
+        self._overflow_action = overflow_action
+        for _ in range(max_size):
+            self._semaphore.acquire()
+
+    def put(self, item):
+        try:
+            self._deque.appendleft(item)
+            self._semaphore.release()
+        except ValueError:
+            if self._overflow_action:
+                self._overflow_action()
+
+    def get(self):
+        self._semaphore.acquire()
+        return self._deque.pop()
 
 
 if __name__ == "__main__":
