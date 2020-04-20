@@ -7,3 +7,4 @@ sample_data
 labelmap.txt
 *.egg-info
 config.yml
+*.jpg
