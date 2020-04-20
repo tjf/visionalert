@@ -8,8 +8,8 @@ import numpy
 from PIL import Image
 
 from visionalert import tensorflow
+from visionalert import load_config, config
 from visionalert.alert import Notifier
-from visionalert.config import load_config, Config
 from visionalert.detection import Dispatcher, Interest
 from visionalert.video import Camera
 
@@ -66,7 +66,7 @@ def run():
     init_logging(args.debug)
 
     input_queue = DiscardingQueue(
-        Config["input_queue_maximum_frames"],
+        config["input_queue_maximum_frames"],
         overflow_action=lambda: logger.warning(
             "Object detection input queue overflow detected, discarding oldest frame!"
         ),
@@ -74,11 +74,11 @@ def run():
 
     cameras = {
         params["name"]: init_camera(params, input_queue.put)
-        for params in Config["cameras"]
+        for params in config["cameras"]
     }
 
     detector = tensorflow.create_detector(
-        Config["tensorflow_model_file"], Config["tensorflow_label_map"]
+        config["tensorflow_model_file"], config["tensorflow_label_map"]
     )
 
     dispatcher = Dispatcher(
@@ -87,8 +87,8 @@ def run():
     dispatcher.start()
 
     for camera in cameras.values():
-        camera.connection_timeout = Config["connection_timeout_seconds"]
-        camera.read_timeout = Config["read_timeout_seconds"]
+        camera.connection_timeout = config["connection_timeout_seconds"]
+        camera.read_timeout = config["read_timeout_seconds"]
         camera.start()
 
     dispatcher.join()

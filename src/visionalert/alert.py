@@ -9,7 +9,7 @@ import boto3
 from PIL import Image
 import requests
 
-from visionalert.config import Config
+from visionalert import config
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 def s3_upload(byte_object, mime_type, s3_filename):
     s3 = boto3.client(
         "s3",
-        aws_access_key_id=Config["aws_access_key"],
-        aws_secret_access_key=Config["aws_secret_key"],
-        endpoint_url=Config["aws_s3_url"],
+        aws_access_key_id=config["aws_access_key"],
+        aws_secret_access_key=config["aws_secret_key"],
+        endpoint_url=config["aws_s3_url"],
     )
 
     s3.upload_fileobj(
         byte_object,
-        Config["aws_image_bucket"],
+        config["aws_image_bucket"],
         s3_filename,
         ExtraArgs={"ContentType": mime_type},
     )
@@ -40,7 +40,7 @@ def frame_to_jpeg(frame):
 
 
 def send_push_notification(title, image_url):
-    gotify_key = {"X-Gotify-Key": Config["gotify_key"]}
+    gotify_key = {"X-Gotify-Key": config["gotify_key"]}
     gotify_req = {
         "extras": {"client::display": {"contentType": "text/markdown"}},
         "message": f"[![Image]({image_url})]({image_url})",
@@ -48,7 +48,7 @@ def send_push_notification(title, image_url):
         "title": f"{title}",
     }
     requests.post(
-        f"{Config['gotify_url']}/message", json=gotify_req, headers=gotify_key
+        f"{config['gotify_url']}/message", json=gotify_req, headers=gotify_key
     )
 
 
@@ -101,7 +101,7 @@ class Notifier:
 
             send_push_notification(
                 f"{event.camera_name} Motion Detected",
-                f"{Config['aws_image_base_url']}/{s3_filename}",
+                f"{config['aws_image_base_url']}/{s3_filename}",
             )
 
             logger.info(

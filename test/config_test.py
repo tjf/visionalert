@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from visionalert.config import load_config, Config
+from visionalert import load_config, config
 
 
 @pytest.fixture
@@ -19,6 +19,6 @@ line3: line3${FOO}valueline3${FOO}value
 
 def test_load_config_with_variables(config_file):
     load_config(config_file)
-    assert Config['line1'] == 'line1value'
-    assert Config['line2'] == 'line2BARvalue'
-    assert Config['line3'] == 'line3BARvalueline3BARvalue'
+    assert config['line1'] == 'line1value'
+    assert config['line2'] == 'line2BARvalue'
+    assert config['line3'] == 'line3BARvalueline3BARvalue'

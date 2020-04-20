@@ -3,7 +3,7 @@ import time
 import numpy
 import pytest
 
-from visionalert.config import Config
+from visionalert import config
 import visionalert.alert as alert
 import visionalert.video as video
 import visionalert.detection as detection
@@ -37,8 +37,7 @@ def patched_send_alert(monkeypatch):
     monkeypatch.setattr(alert, "s3_upload", capture)
     monkeypatch.setattr(alert, "send_push_notification", capture)
     monkeypatch.setattr(time, "time", lambda: 31337)
-    Config._config_dict["aws_image_base_url"] = "http://foo.com"
-
+    monkeypatch.setitem(config, "aws_image_base_url", "http://foo.com")
     return mock_args
 
 
