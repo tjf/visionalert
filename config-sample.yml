@@ -1,0 +1,86 @@
+# VisionAlert Configuration File
+# Note, use the syntax ${FOO} to load values from environment variables
+
+# Maximum backlog of frames for object detection.  If we try to enqueue
+# more than this, we'll log a warning and drop the oldest frames from the
+# queue.  This parameter has a direct impact on the amount of RAM the
+# application will use.  For example, 20 1920x1080 frames will consume
+# about 125MB of RAM.
+input_queue_maximum_frames: 20
+
+# If unable to connect to the camera in this amount of time, give up and
+# try again.
+connection_timeout_seconds: 3
+
+# If we don't receive any bytes from the camera in this amount of time,
+# give up and try again.
+read_timeout_seconds: 3
+
+# AWS credentials for uploading images displayed in push notifications
+# send via Gotify.
+aws_access_key: ${AWS_ACCESS_KEY}
+aws_secret_key: ${AWS_SECRET_KEY}
+
+# This is the base URL that your uploaded images can be reached at.  This
+# is normally something like https://s3.amazon.com/bucket-name
+# This bucket must allow public read access of the images uploaded to it
+# for them to display in Gotify.
+aws_image_base_url: https://s3.amazon.com/gotify-images
+
+# S3 bucket your images should be uploaded to.
+aws_image_bucket: gotify-images
+
+# S3 endpoint URL for uploads.  You can override this here if you use MinIO
+# instead of S3
+aws_s3_url: https://minio.example.com
+
+# App key for Gotify push notifications
+gotify_key: 78sadf0fdh_sdf
+
+# Model and labelmap file that are used by Tensorflow.  Google Coral EdgeTPU
+# is supported, but ensure you're using a value model for it, otherwise
+# the application won't start.
+tensorflow_model_file: detect.tflite
+tensorflow_label_map: labelmap.txt
+
+# List of cameras to monitor.  Each has various parameters that are described
+# inline.
+cameras:
+    # All cameras must have a unique name.
+  - name: Front Door
+
+    # URL to capture frames from.  Many cameras offer a 'sub-stream' URL with
+    # images at a lower resolution or frame rate.  Using this will conserve
+    # bandwidth and RAM.  Many cameras allow the username and password as shown
+    # here.  Note: For RTSP we will attempt to use TCP but fall back to UDP if
+    # unable.
+    url: rtsp://user:${CAMERA_PASSWORD}@192.168.1.31/Streaming/Channels/1
+
+    # This is the frames per second that will be submitted for object detection.
+    # If this is higher than the FPS received from the camera, then the camera's
+    # native frame rate will be used.
+    fps: 3
+
+    # A single channel (grayscale) file that is the same resolution as your camera
+    # that can be used to mask off areas where you don't want to be alerted when
+    # objects are detected.  White pixels of the mask are regions you're
+    # are interested in, black pixels are regions you don't want to be alerted of.
+    # Note, the entire bounding box must be in the black area to prevent alerts.
+    # Any part of the bottom of it in the white area will trigger an alert.
+    mask: frontdoor.jpg
+
+    # Types of objects you're interested in detecting and alerting on.  These
+    # would come from the label map for whatever tensorflow model you're using.
+    # Typically 'person', 'car', & 'truck' are what you're looking for.
+    interests:
+
+      person:
+        # Minimum confidence percent that should trigger a detection event for
+        # this interest class.  Valid values are from 0.0 to 1.0
+        confidence: 0.60
+
+      car:
+        confidence: 0.55
+
+      dog:
+        confidence: 0.65

@@ -3,8 +3,5 @@
 __pycache__
 sample_data
 .pyc
-*.tflite
-labelmap.txt
 *.egg-info
-config.yml
-*.jpg
+*.img
