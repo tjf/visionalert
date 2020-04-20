@@ -1,3 +1,4 @@
+import collections
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 import logging
@@ -56,57 +57,44 @@ class Notifier:
     Responsible for sending alert when an event is received.
     """
 
-    executor = ThreadPoolExecutor(thread_name_prefix="Notifier")
-    _event_scoreboard = {}
+    def __init__(self, detection_timeout=30, send_delay=5):
+        self.detection_timeout = detection_timeout
+        self.send_delay = send_delay
+        self.executor = ThreadPoolExecutor(thread_name_prefix="Notifier")
+        self.current_events = collections.defaultdict(dict)
 
-    @classmethod
-    def _get_last_object_event(cls, camera_name, object_name):
-        if camera_name not in cls._event_scoreboard:
-            cls._event_scoreboard[camera_name] = {}
-
-        if object_name not in cls._event_scoreboard[camera_name]:
-            cls._event_scoreboard[camera_name][object_name] = None
-
-        return cls._event_scoreboard[camera_name][object_name]
-
-    @classmethod
-    def _set_last_object_event(cls, event):
-        cls._event_scoreboard[event.camera_name][event.object_name] = event
-
-    @classmethod
-    def submit_detections(cls, data):
+    def submit_detections(self, data):
         detections, frame = data
-
         for each in detections:
-            event = cls._get_last_object_event(frame.camera_name, each.name)
+            self._update_event(frame, each)
 
-            if not event or time.time() - event.last_frame_time > 30:
-                logger.info(
-                    f"New detection event for {each.name} triggered on {frame.camera_name} "
-                    f"with confidence {each.confidence * 100:.2f}%"
-                )
-                new_event = Event(frame.camera_name, each.name)
-                new_event.update(each.confidence, frame.data)
-                cls._set_last_object_event(new_event)
-                cls._enqueue_alert(new_event)
+    def _update_event(self, frame, detected_object):
+        event = self.current_events[frame.camera_name].setdefault(detected_object.name)
 
-            else:
-                logger.info(
-                    f"{each.name.capitalize()} still detected on camera {frame.camera_name} "
-                    f"with confidence {each.confidence * 100:.2f}% at {each.coordinates}"
-                )
-                event.update(each.confidence, frame.data)
+        if not event or time.time() - event.last_frame_time > self.detection_timeout:
+            logger.info(
+                f"New detection event for {detected_object.name} triggered on {frame.camera_name} "
+                f"with confidence {detected_object.confidence * 100:.2f}%"
+            )
+            new_event = Event(frame, detected_object)
+            self.current_events[frame.camera_name][detected_object.name] = new_event
+            self._enqueue_alert(new_event)
 
-    @classmethod
-    def _enqueue_alert(cls, event):
-        cls.executor.submit(cls._send_alert, event)
+        else:
+            logger.info(
+                f"{detected_object.name.capitalize()} still detected on camera {frame.camera_name} "
+                f"with confidence {detected_object.confidence * 100:.2f}% at {detected_object.coordinates}"
+            )
+            event.update(detected_object.confidence, frame.data)
 
-    @classmethod
-    def _send_alert(cls, event):
+    def _enqueue_alert(self, event):
+        self.executor.submit(self._send_alert, event)
+
+    def _send_alert(self, event):
         try:
             # Wait a few seconds to give the event a chance to potentially
             # get a higher scoring frame.
-            time.sleep(5)  # TODO make this configurable
+            time.sleep(self.send_delay)  # TODO make this configurable
 
             s3_filename = f"{int(time.time())}.jpg"
             s3_upload(frame_to_jpeg(event.frame), "image/jpg", s3_filename)
@@ -123,6 +111,7 @@ class Notifier:
 
         except Exception as e:
             logger.warning(e)
+            raise e
 
 
 class Event:
@@ -131,13 +120,15 @@ class Event:
     frame to be updated if one with a higher confidence is available.
     """
 
-    def __init__(self, camera_name, object_name) -> None:
-        self.camera_name = camera_name
-        self.object_name = object_name
-        self._mutex = threading.RLock()  # Just being cautious here
+    def __init__(self, frame, detected_object) -> None:
+        self.camera_name = frame.camera_name
+        self.object_name = detected_object.name
+        self._mutex = threading.Lock()  # Just being cautious here
         self._last_frame_time = 0.0
         self._confidence = 0.0
         self._frame = None
+
+        self.update(detected_object.confidence, frame.data)
 
     def update(self, confidence, frame):
         with self._mutex:

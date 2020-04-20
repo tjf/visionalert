@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from visionalert import load_config, Config
+from visionalert.config import load_config, Config
 
 
 @pytest.fixture

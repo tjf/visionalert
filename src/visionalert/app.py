@@ -81,7 +81,9 @@ def run():
         Config["tensorflow_model_file"], Config["tensorflow_label_map"]
     )
 
-    dispatcher = Dispatcher(input_queue.get, detector, Notifier.submit_detections, cameras)
+    dispatcher = Dispatcher(
+        input_queue.get, detector, Notifier().submit_detections, cameras
+    )
     dispatcher.start()
 
     for camera in cameras.values():
@@ -90,6 +92,7 @@ def run():
         camera.start()
 
     dispatcher.join()
+
 
 class DiscardingQueue:
     """A bounded queue that discards the oldest items when it overflows"""
