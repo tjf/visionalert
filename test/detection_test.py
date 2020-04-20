@@ -24,6 +24,10 @@ def test_is_masked_when_mask_is_none():
     assert result == False
 
 
+def test_rectangle_area():
+    assert Rectangle(0, 0, 10, 10).area == 100
+
+
 @pytest.mark.parametrize(
     "detection_result, expected",
     [

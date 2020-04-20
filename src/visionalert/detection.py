@@ -1,4 +1,5 @@
 import collections
+from dataclasses import dataclass
 import logging
 import threading
 
@@ -9,10 +10,19 @@ logger = logging.getLogger(__name__)
 DetectionResult = collections.namedtuple(
     "DetectionResult", ["name", "confidence", "coordinates"]
 )
-Rectangle = collections.namedtuple(
-    "Rectangle", ["start_x", "start_y", "end_x", "end_y"]
-)
 Interest = collections.namedtuple("Interest", ["name", "confidence"])
+
+
+@dataclass
+class Rectangle:
+    start_x: int
+    start_y: int
+    end_x: int
+    end_y: int
+
+    @property
+    def area(self):
+        return (self.end_x - self.start_x) * (self.end_y - self.start_y)
 
 
 def is_masked(mask, rectangle):
@@ -65,7 +75,7 @@ def annotate_frame(frame, detected_object, color=(0, 255, 0), line_weight=2):
 
     # Draw label background and text
     label = (
-        f"{detected_object.name.capitalize()}: {int(detected_object.confidence * 100)}%"
+        f"{detected_object.name.capitalize()}: {int(detected_object.confidence * 100)}% ({coords.area})"
     )
     label_size, base_line = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
     label_ymin = max(coords.start_y, label_size[1] + 10)
