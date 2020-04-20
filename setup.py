@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="visionalert",
-    version="0.0.1",
+    version="20.4.1",
     author="Tyler Frederick",
     author_email="tyler@tylerfrederick.com",
     description=(
