@@ -44,20 +44,21 @@ def init_camera(config, frame_action):
         frame_action,
         fps=config["fps"] if "fps" in config else None,
         mask=init_mask(config["mask"]) if "mask" in config else None,
-        interests=init_interests(config["interests"]),
+        interests={
+            name: Interest(
+                name,
+                interest["confidence"],
+                interest.get("minimum_area", 0),
+                interest.get("maximum_area", sys.maxsize),
+            )
+            for name, interest in config["interests"].items()
+        },
     )
 
 
 def init_mask(filename):
     image = Image.open(filename)
     return numpy.asarray(image)
-
-
-def init_interests(config):
-    return {
-        name: Interest(name=name, confidence=v["confidence"])
-        for name, v in config.items()
-    }
 
 
 def run():

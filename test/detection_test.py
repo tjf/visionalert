@@ -5,7 +5,9 @@ import visionalert.video as video
 import visionalert.detection as detection
 from visionalert.detection import Rectangle, DetectionResult, Interest, Dispatcher
 
-TEST_RECTANGLE = Rectangle(5, 5, 30, 30)
+SMALL_RECTANGLE = Rectangle(5, 5, 30, 30)  # Area 625
+MEDIUM_RECTANGLE = Rectangle(5, 5, 100, 100)  # Area 9025
+LARGE_RECTANGLE = Rectangle(5, 5, 300, 300)  # Area 87025
 
 
 @pytest.mark.parametrize(
@@ -21,7 +23,7 @@ def test_is_masked(rectangle, expected):
 
 def test_is_masked_when_mask_is_none():
     result = detection.is_masked(None, Rectangle(0, 0, 100, 100))
-    assert result == False
+    assert result is False
 
 
 def test_rectangle_area():
@@ -31,17 +33,18 @@ def test_rectangle_area():
 @pytest.mark.parametrize(
     "detection_result, expected",
     [
-        (DetectionResult("person", 0.1, TEST_RECTANGLE), False),
-        (DetectionResult("person", 0.6, TEST_RECTANGLE), True),
-        (DetectionResult("person", 0.8, TEST_RECTANGLE), True),
-        (DetectionResult("cat", 0.8, TEST_RECTANGLE), False),
-        (DetectionResult("car", 0.8, TEST_RECTANGLE), True),
+        (DetectionResult("person", 0.1, MEDIUM_RECTANGLE), False),
+        (DetectionResult("person", 0.8, MEDIUM_RECTANGLE), True),
+        (DetectionResult("car", 0.8, SMALL_RECTANGLE), False),
+        (DetectionResult("car", 0.8, MEDIUM_RECTANGLE), True),
+        (DetectionResult("car", 0.8, LARGE_RECTANGLE), False),
+        (DetectionResult("truck", 0.8, MEDIUM_RECTANGLE), False),
     ],
 )
 def test_matches_interest(detection_result, expected):
     interests = {
-        "person": Interest("person", 0.6),
-        "car": Interest("car", 0.5),
+        "person": Interest("person", 0.6, minimum_area=0, maximum_area=1000000),
+        "car": Interest("car", 0.5, minimum_area=5000, maximum_area=10000),
     }
     result = detection.matches_interest(interests, detection_result)
     assert result == expected
@@ -71,7 +74,7 @@ def test_dispatcher_process_frame(mocker, mock_camera, mock_detection_results):
 @pytest.fixture()
 def mock_camera():
     return video.Camera(
-        "test_cam", None, None, interests={"person": Interest("person", 0.6)}
+        "test_cam", None, None, interests={"person": Interest("person", 0.6, 0, 10000)}
     )
 
 
