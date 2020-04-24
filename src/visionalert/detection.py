@@ -10,7 +10,14 @@ logger = logging.getLogger(__name__)
 DetectionResult = collections.namedtuple(
     "DetectionResult", ["name", "confidence", "coordinates"]
 )
-Interest = collections.namedtuple("Interest", ["name", "confidence"])
+
+
+@dataclass
+class Interest:
+    name: str
+    confidence: float
+    minimum_area: int
+    maximum_area: int
 
 
 @dataclass
@@ -54,10 +61,18 @@ def matches_interest(interests, detected_object):
     """
     if interests is None or detected_object.name not in interests:
         return False
+    elif outside_area_limits(interests, detected_object):
+        return False
     elif detected_object.confidence < interests[detected_object.name].confidence:
         return False
     else:
         return True
+
+
+def outside_area_limits(interests, detected_object):
+    area = detected_object.coordinates.area
+    interest = interests[detected_object.name]
+    return area < interest.minimum_area or area > interest.maximum_area
 
 
 # TODO refactor this to get the magic numbers out of it and add some tests.
@@ -74,9 +89,7 @@ def annotate_frame(frame, detected_object, color=(0, 255, 0), line_weight=2):
     )
 
     # Draw label background and text
-    label = (
-        f"{detected_object.name.capitalize()}: {int(detected_object.confidence * 100)}% ({coords.area})"
-    )
+    label = f"{detected_object.name.capitalize()}: {int(detected_object.confidence * 100)}% ({coords.area})"
     label_size, base_line = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
     label_ymin = max(coords.start_y, label_size[1] + 10)
 

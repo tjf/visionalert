@@ -79,6 +79,18 @@ cameras:
         # this interest class.  Valid values are from 0.0 to 1.0
         confidence: 0.60
 
+        # Min and max pixel area for the object.  This will completely depend
+        # on your camera resolution and where it's looking.  For example, if
+        # your camera is pointing at driveway and has a resolution of 1920x1080
+        # and an average person could never occupy a box larger than 200x800 or
+        # 16000 pixels, then this would be your maximum value.  Calculate the
+        # minimum value similarly.  This is used to reduce false detection
+        # scenarios where you may have a small object like a duck detected as
+        # a person, for example.  (Hey, it happens, it's highly dependent on
+        # the training of the model which is outside the scope of this doc.)
+        minimum_area: 10000
+        maximum_area: 50000
+
       car:
         confidence: 0.55
 
