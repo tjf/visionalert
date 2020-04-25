@@ -17,13 +17,11 @@ LARGE_RECTANGLE = Rectangle(5, 5, 300, 300)  # Area 87025
 def test_is_masked(rectangle, expected):
     mask = np.zeros((10, 10))
     mask[5:, :] = 255  # unmask the bottom half
-    result = detection.is_masked(mask, rectangle)
-    assert result == expected
+    assert detection.is_masked(mask, rectangle) == expected
 
 
 def test_is_masked_when_mask_is_none():
-    result = detection.is_masked(None, Rectangle(0, 0, 100, 100))
-    assert result is False
+    assert detection.is_masked(None, Rectangle(0, 0, 100, 100)) is False
 
 
 def test_rectangle_area():
@@ -46,8 +44,7 @@ def test_matches_interest(detection_result, expected):
         "person": Interest("person", 0.6, minimum_area=0, maximum_area=1000000),
         "car": Interest("car", 0.5, minimum_area=5000, maximum_area=10000),
     }
-    result = detection.matches_interest(interests, detection_result)
-    assert result == expected
+    assert detection.matches_interest(interests, detection_result) == expected
 
 
 def test_dispatcher_process_frame(mocker, mock_camera, mock_detection_results):
