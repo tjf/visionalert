@@ -14,6 +14,8 @@ DetectionResult = collections.namedtuple(
 
 @dataclass
 class Interest:
+    """Something that may be detected in an image that we are interested in"""
+
     name: str
     confidence: float
     minimum_area: int
@@ -22,6 +24,8 @@ class Interest:
 
 @dataclass
 class Rectangle:
+    """Represents the bounding box that encapsulates a detected object"""
+
     start_x: int
     start_y: int
     end_x: int
