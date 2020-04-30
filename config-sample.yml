@@ -66,7 +66,7 @@ cameras:
     # objects are detected.  White pixels of the mask are regions you're
     # are interested in, black pixels are regions you don't want to be alerted of.
     # Note, the entire bounding box must be in the black area to prevent alerts.
-    # Any part of the bottom of it in the white area will trigger an alert.
+    # Any part of it in the white area will trigger an alert.
     mask: frontdoor.jpg
 
     # Types of objects you're interested in detecting and alerting on.  These

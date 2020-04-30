@@ -42,7 +42,7 @@ def init_camera(config, frame_action):
         config["name"],
         config["url"],
         frame_action,
-        fps=config["fps"] if "fps" in config else None,
+        fps=config.get("fps"),
         mask=init_mask(config["mask"]) if "mask" in config else None,
         interests={
             name: Interest(
