@@ -4,6 +4,6 @@ fpstimer==0.0.1
 imageio==2.8.0
 numpy==1.18.3
 opencv-python-headless==4.2.0.34
-Pillow==7.1.1
+Pillow==8.2.0
 PyYAML==5.3.1
 requests==2.23.0
